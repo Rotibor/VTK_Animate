@@ -22,6 +22,7 @@
 #include <vtkSliderRepresentation3D.h>
 #include <vtkImageTracerWidget.h>
 #include <vtkAnimationScene.h>
+#include <vtkIntersectionPolyDataFilter.h>
 
 #include "TimerCallback.h"
 #include "Animation.h"
@@ -31,6 +32,16 @@
 using namespace std;
 
 //http://www.vtk.org/Wiki/VTK/Examples/Cxx
+
+/*
+what to learn: parametric objects
+vtkOrientedGlyphContourRepresentation
+
+The vtkCellLocator does this, but it operates on a vtkDataSet
+rather than on an actor: actor->GetMapper()->GetInput()
+The cell locator works in data coords rather than world coords
+(use the actor's matrix to do the coord conversion, if needed).
+*/
 
 /*
 the base VTK class:
@@ -149,15 +160,52 @@ int main(int, char *argv[])
   actorSphere->SetMapper(mapperSphere);
   actorSphere->GetProperty()->SetInterpolationToFlat();
   //-------------------------------------------------------
-  vtkSmartPointer<vtkCylinderSource> cylinderSource = vtkSmartPointer<vtkCylinderSource>::New();
+  vtkSmartPointer<vtkSphereSource> cylinderSource = vtkSmartPointer<vtkSphereSource>::New();
   cylinderSource->SetCenter(0.0, 0.0, 0.0);
   cylinderSource->SetRadius(5.0);
-  cylinderSource->SetHeight(7.0);
-  cylinderSource->SetResolution(100);
+  //cylinderSource->SetHeight(7.0);
+  //cylinderSource->SetResolution(100);
+  cylinderSource->Update();
  
   vtkSmartPointer<vtkPolyDataMapper> mapper =  vtkSmartPointer<vtkPolyDataMapper>::New();
   mapper->SetInputConnection(cylinderSource->GetOutputPort());
+  vtkSmartPointer<vtkActor> actor      = vtkSmartPointer<vtkActor>::New();
+  mapper->ScalarVisibilityOff();
+  actor->SetMapper(mapper);
+  actor->GetProperty()->SetOpacity(.3);
+  actor->GetProperty()->SetColor(0,1,0);
+
+
+  vtkSmartPointer<vtkSphereSource> cylinderSource1 = vtkSmartPointer<vtkSphereSource>::New();
+  cylinderSource1->SetCenter(0.0, 0.0, 0.0);
+  cylinderSource1->SetRadius(5.0);
+  //cylinderSource1->SetHeight(7.0);
+  //cylinderSource1->SetResolution(100);
+  cylinderSource1->Update();
+  
+  vtkSmartPointer<vtkPolyDataMapper> mapperx =  vtkSmartPointer<vtkPolyDataMapper>::New();
+  mapperx->SetInputConnection(cylinderSource1->GetOutputPort());
+  mapperx->ScalarVisibilityOff();
+  vtkSmartPointer<vtkActor> actorx      = vtkSmartPointer<vtkActor>::New();
+  actorx->SetMapper(mapperx);
+  actorx->GetProperty()->SetOpacity(.3);
+  actorx->GetProperty()->SetColor(1,0,0);  
   //-------------------------------------------------------
+	  vtkSmartPointer<vtkIntersectionPolyDataFilter> intersectionPolyDataFilter = vtkSmartPointer<vtkIntersectionPolyDataFilter>::New();
+	  intersectionPolyDataFilter->SetInputConnection( 0, cylinderSource->GetOutputPort() );
+	  intersectionPolyDataFilter->SetInputConnection( 1, cylinderSource1->GetOutputPort() );
+	  intersectionPolyDataFilter->Update();
+ 
+	  vtkSmartPointer<vtkPolyDataMapper> intersectionMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+	  intersectionMapper->SetInputConnection( intersectionPolyDataFilter->GetOutputPort() );
+	  intersectionMapper->ScalarVisibilityOff();
+ 
+	  vtkSmartPointer<vtkActor> intersectionActor = vtkSmartPointer<vtkActor>::New();
+	  intersectionActor->SetMapper( intersectionMapper );
+	  intersectionActor->GetProperty()->SetColor(0,0,1); 
+  //-------------------------------------------------------
+
+
   // Create a pentagon (used regular polygone)
   vtkSmartPointer<vtkRegularPolygonSource> polygonSource = vtkSmartPointer<vtkRegularPolygonSource>::New();
  
@@ -208,9 +256,6 @@ int main(int, char *argv[])
   std::cout << "intersected? " << iD << std::endl;
   std::cout << "intersection: " << x[0] << " " << x[1] << " " << x[2] << std::endl;
 
-
-
-
   /*
 	create data filter
   */
@@ -241,12 +286,12 @@ int main(int, char *argv[])
 	Create an actor. Actor represents an object rendered in the scene, along with its properties
 	and position. It can be treated as logical entity in the scene
   */
-  vtkSmartPointer<vtkActor> actor      = vtkSmartPointer<vtkActor>::New();
+  
   vtkSmartPointer<vtkActor> polyActor  = vtkSmartPointer<vtkActor>::New();
   vtkSmartPointer<vtkActor> polyActor1 = vtkSmartPointer<vtkActor>::New();
   vtkSmartPointer<vtkActor> lineActor  = vtkSmartPointer<vtkActor>::New();
 
-  actor->SetMapper(mapper);
+
   polyActor->SetMapper(polyMapper);   
   polyActor1->SetMapper(mapper1);   
   lineActor->SetMapper(lineMapper);   
@@ -274,6 +319,8 @@ int main(int, char *argv[])
   //renderer->AddActor(lineActor);
 
   renderer->AddActor(actorSphere);//@@@@@@
+  renderer->AddActor(actorx);//@@@@@@
+  renderer->AddActor(intersectionActor);
   renderer->SetBackground(.1, .3,.2); // Background color dark green
  
   //*****************************************
@@ -336,7 +383,7 @@ int main(int, char *argv[])
 		  // Create an ActorAnimator for each actor;
 		  std::vector<double> endPos(3),  startPos(3);
 		  endPos[0]   = -1; endPos[1]   = -1; endPos[2]   = -1;
-		  startPos[0] = 10;  startPos[1] = 1;  startPos[2] = 1;
+		  startPos[0] = 2;  startPos[1] = 1;  startPos[2] = 1;
 
 		  ActorAnimator animateSphere;
 		  animateSphere.SetActor(actorSphere);
@@ -384,3 +431,214 @@ int main(int, char *argv[])
   renderWindowInteractor->Start();  
   return EXIT_SUCCESS;
 }
+
+
+/*
+2 ways of transform: data and actor
+vtkSmartPointer<vtkTransform> transformation= 
+vtkSmartPointer<vtkTransform>::New(); 
+transformation >Translate(double x, double y, double z);
+transformation ->RotateX(double angle);
+transformation ->Scale(double x, double y, double z);
+
+vtkSmartPointer<vtkTransformPolyDataFilter> transformFilter = 
+vtkSmartPointer<vtkTransformPolyDataFilter>::New(); 
+transformFilter->SetInputConnection(sphereSource->GetOutputPort()); transformFilter->SetTransform(transformation); 
+transformFilter->Update(); 
+
+vtkSmartPointer<vtkTransform> transform = 
+vtkSmartPointer<vtkTransform>::New(); 
+transform->RotateZ(90.0);  
+actor->SetUserTransform(transform);
+//also we can use filter< for example to draw intersection
+
+
+  vtkSmartPointer<vtkSphereSource> sphereSource =
+    vtkSmartPointer<vtkSphereSource>::New();
+  sphereSource->Update();
+ 
+  vtkSmartPointer<vtkTransform> translation =
+    vtkSmartPointer<vtkTransform>::New();
+  translation->Translate(1.0, 2.0, 3.0);
+ 
+  vtkSmartPointer<vtkTransformPolyDataFilter> transformFilter =
+    vtkSmartPointer<vtkTransformPolyDataFilter>::New();
+  transformFilter->SetInputConnection(sphereSource->GetOutputPort());
+  transformFilter->SetTransform(translation);
+  transformFilter->Update();
+ ----------------------------------------------------------------------------
+  // Create a mapper and actor
+  vtkSmartPointer<vtkPolyDataMapper> originalMapper =
+    vtkSmartPointer<vtkPolyDataMapper>::New();
+  originalMapper->SetInputConnection(sphereSource->GetOutputPort());
+ 
+  vtkSmartPointer<vtkActor> originalActor =
+    vtkSmartPointer<vtkActor>::New();
+  originalActor->SetMapper(originalMapper);
+  originalActor->GetProperty()->SetColor(1,0,0);
+ 
+  // Create a mapper and actor
+  vtkSmartPointer<vtkPolyDataMapper> transformedMapper =
+    vtkSmartPointer<vtkPolyDataMapper>::New();
+  transformedMapper->SetInputConnection(transformFilter->GetOutputPort());
+ 
+  vtkSmartPointer<vtkActor> transformedActor =
+    vtkSmartPointer<vtkActor>::New();
+  transformedActor->SetMapper(transformedMapper);
+  transformedActor->GetProperty()->SetColor(0,1,0);
+ 
+  // Create a renderer, render window, and interactor
+  vtkSmartPointer<vtkRenderer> renderer =
+    vtkSmartPointer<vtkRenderer>::New();
+  vtkSmartPointer<vtkRenderWindow> renderWindow =
+    vtkSmartPointer<vtkRenderWindow>::New();
+  renderWindow->AddRenderer(renderer);
+  vtkSmartPointer<vtkRenderWindowInteractor> renderWindowInteractor =
+    vtkSmartPointer<vtkRenderWindowInteractor>::New();
+  renderWindowInteractor->SetRenderWindow(renderWindow);
+ 
+  // Add the actor to the scene
+  renderer->AddActor(originalActor);
+  renderer->AddActor(transformedActor);
+  renderer->SetBackground(.3, .6, .3); // Background color green
+ 
+  // Render and interact
+  renderWindow->Render();
+  renderWindowInteractor->Start();
+  -------------------------------------------------------------
+    vtkSmartPointer<vtkSphereSource> sphereSource1 = vtkSmartPointer<vtkSphereSource>::New();
+  sphereSource1->SetCenter(0.0, 0.0, 0.0);
+  sphereSource1->SetRadius(2.0f);
+  sphereSource1->Update();
+  vtkSmartPointer<vtkPolyDataMapper> sphere1Mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+  sphere1Mapper->SetInputConnection( sphereSource1->GetOutputPort() );
+  sphere1Mapper->ScalarVisibilityOff();
+  vtkSmartPointer<vtkActor> sphere1Actor = vtkSmartPointer<vtkActor>::New();
+  sphere1Actor->SetMapper( sphere1Mapper );
+  sphere1Actor->GetProperty()->SetOpacity(.3);
+  sphere1Actor->GetProperty()->SetColor(1,0,0);
+ 
+  vtkSmartPointer<vtkSphereSource> sphereSource2 = vtkSmartPointer<vtkSphereSource>::New();
+  sphereSource2->SetCenter(1.0, 0.0, 0.0);
+  sphereSource2->SetRadius(2.0f);
+  vtkSmartPointer<vtkPolyDataMapper> sphere2Mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+  sphere2Mapper->SetInputConnection( sphereSource2->GetOutputPort() );
+  sphere2Mapper->ScalarVisibilityOff();
+  vtkSmartPointer<vtkActor> sphere2Actor = vtkSmartPointer<vtkActor>::New();
+  sphere2Actor->SetMapper( sphere2Mapper );
+  sphere2Actor->GetProperty()->SetOpacity(.3);
+  sphere2Actor->GetProperty()->SetColor(0,1,0);
+ 
+  vtkSmartPointer<vtkIntersectionPolyDataFilter> intersectionPolyDataFilter =
+    vtkSmartPointer<vtkIntersectionPolyDataFilter>::New();
+  intersectionPolyDataFilter->SetInputConnection( 0, sphereSource1->GetOutputPort() );
+  intersectionPolyDataFilter->SetInputConnection( 1, sphereSource2->GetOutputPort() );
+  intersectionPolyDataFilter->Update();
+ 
+  vtkSmartPointer<vtkPolyDataMapper> intersectionMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+  intersectionMapper->SetInputConnection( intersectionPolyDataFilter->GetOutputPort() );
+  intersectionMapper->ScalarVisibilityOff();
+ 
+  vtkSmartPointer<vtkActor> intersectionActor = vtkSmartPointer<vtkActor>::New();
+  intersectionActor->SetMapper( intersectionMapper );
+ 
+  vtkSmartPointer<vtkRenderer> renderer = vtkSmartPointer<vtkRenderer>::New();
+  renderer->AddViewProp(sphere1Actor);
+  renderer->AddViewProp(sphere2Actor);
+  renderer->AddViewProp(intersectionActor);
+ 
+  vtkSmartPointer<vtkRenderWindow> renderWindow = vtkSmartPointer<vtkRenderWindow>::New();
+  renderWindow->AddRenderer( renderer );
+ 
+  vtkSmartPointer<vtkRenderWindowInteractor> renWinInteractor =
+    vtkSmartPointer<vtkRenderWindowInteractor>::New();
+  renWinInteractor->SetRenderWindow( renderWindow );
+ 
+  renderWindow->Render();
+  renWinInteractor->Start();
+  ---------------------------------------------------------------
+int main(int argc, char *argv[])
+{
+  int resolution = 50;
+  if (argc > 1)
+    {
+    resolution = atoi(argv[1]);
+    }
+ 
+  // Create a sampled sphere
+  vtkSmartPointer<vtkSphere> implicitSphere =
+    vtkSmartPointer<vtkSphere>::New();
+  double radius = 1.0;
+  implicitSphere->SetRadius(radius);
+ 
+  vtkSmartPointer<vtkSampleFunction> sampledSphere =
+    vtkSmartPointer<vtkSampleFunction>::New();
+  sampledSphere->SetSampleDimensions(resolution, resolution, resolution);
+  double xMin = -radius * 2.0;
+  double xMax =  radius * 2.0;
+  sampledSphere->SetModelBounds(xMin, xMax,
+                                xMin, xMax,
+                                xMin, xMax);
+  sampledSphere->SetImplicitFunction(implicitSphere);
+ 
+  vtkSmartPointer<vtkMarchingCubes> isoSphere =
+    vtkSmartPointer<vtkMarchingCubes>:: New();
+  isoSphere->SetValue(0,1.0);
+  isoSphere->SetInputConnection(sampledSphere->GetOutputPort());
+ 
+  // Create a sampled cylinder
+  vtkSmartPointer<vtkCylinder> implicitCylinder =
+    vtkSmartPointer<vtkCylinder>::New();
+  implicitCylinder->SetRadius(radius/2.0);
+  vtkSmartPointer<vtkSampleFunction> sampledCylinder =
+    vtkSmartPointer<vtkSampleFunction>::New();
+  sampledCylinder->SetSampleDimensions(resolution, resolution, resolution);
+  sampledCylinder->SetModelBounds(xMin, xMax,
+                                  xMin, xMax,
+                                  xMin, xMax);
+  sampledCylinder->SetImplicitFunction(implicitCylinder);
+ 
+  // Probe cylinder with the sphere isosurface
+  vtkSmartPointer<vtkProbeFilter> probeCylinder =
+    vtkSmartPointer<vtkProbeFilter>::New();
+  probeCylinder->SetInputConnection(0, isoSphere->GetOutputPort());
+  probeCylinder->SetInputConnection(1, sampledCylinder->GetOutputPort());
+  probeCylinder->Update();
+ 
+  // Restore the original normals
+  probeCylinder->GetOutput()->GetPointData()->SetNormals(
+    isoSphere->GetOutput()->GetPointData()->GetNormals());
+ 
+  std::cout << "Scalar range: "
+            << probeCylinder->GetOutput()->GetScalarRange()[0] << ", "
+            << probeCylinder->GetOutput()->GetScalarRange()[1] << std::endl;
+ 
+  // Create a mapper and actor
+  vtkSmartPointer<vtkPolyDataMapper> mapSphere =
+    vtkSmartPointer<vtkPolyDataMapper>::New();
+  mapSphere->SetInputConnection(probeCylinder->GetOutputPort());
+  mapSphere->SetScalarRange(probeCylinder->GetOutput()->GetScalarRange());
+ 
+  vtkSmartPointer<vtkActor> sphere =
+    vtkSmartPointer<vtkActor>::New();
+  sphere->SetMapper(mapSphere);
+ 
+  // Visualize
+  vtkSmartPointer<vtkRenderer> renderer = 
+    vtkSmartPointer<vtkRenderer>::New();
+  vtkSmartPointer<vtkRenderWindow> renderWindow = 
+    vtkSmartPointer<vtkRenderWindow>::New();
+  renderWindow->AddRenderer(renderer);
+  vtkSmartPointer<vtkRenderWindowInteractor> renderWindowInteractor = 
+    vtkSmartPointer<vtkRenderWindowInteractor>::New();
+  renderWindowInteractor->SetRenderWindow(renderWindow);
+ 
+  renderer->AddActor(sphere);
+  renderer->SetBackground(1,1,1); // Background color white
+ 
+  renderWindow->Render();
+  renderWindowInteractor->Start();
+ 
+  return EXIT_SUCCESS;
+}
+*/
